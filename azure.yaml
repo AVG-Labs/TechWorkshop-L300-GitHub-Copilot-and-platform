@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+name: zava-storefront
+metadata:
+  template: zava-storefront-azd
+
+services:
+  web:
+    project: ./src
+    language: dotnet
+    host: appservice
+    docker:
+      path: ./Dockerfile
+      context: ./src
+
+infra:
+  provider: bicep
+  path: ./infra
+  module: main
+
+# Hooks can be used to run scripts at specific points in the azd workflow
+# hooks:
+#   preprovision:
+#     windows:
+#       shell: pwsh
+#       run: echo "Running preprovision hook"
+#   postprovision:
+#     windows:
+#       shell: pwsh
+#       run: echo "Running postprovision hook"
