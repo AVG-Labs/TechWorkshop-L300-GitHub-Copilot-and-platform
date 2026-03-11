@@ -19,9 +19,6 @@ param logAnalyticsWorkspaceId string
 @description('The name of the Azure Container Registry')
 param acrName string
 
-@description('The principal ID to assign ACR pull role')
-param principalId string = ''
-
 @description('Azure AI Services endpoint')
 param aiServicesEndpoint string = ''
 
@@ -60,18 +57,11 @@ resource appService 'Microsoft.Web/sites@2022-09-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       http20Enabled: true
+      acrUseManagedIdentityCreds: true
       appSettings: [
         {
           name: 'DOCKER_REGISTRY_SERVER_URL'
           value: 'https://${acrLoginServer}'
-        }
-        {
-          name: 'DOCKER_REGISTRY_SERVER_USERNAME'
-          value: acrName
-        }
-        {
-          name: 'DOCKER_REGISTRY_SERVER_PASSWORD'
-          value: ''
         }
         {
           name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE'
@@ -84,6 +74,14 @@ resource appService 'Microsoft.Web/sites@2022-09-01' = {
         {
           name: 'AZURE_AI_SERVICES_NAME'
           value: aiServicesName
+        }
+        {
+          name: 'AzureAI__Endpoint'
+          value: aiServicesEndpoint
+        }
+        {
+          name: 'AzureAI__DeploymentName'
+          value: 'gpt-4o'
         }
       ]
     }
@@ -139,11 +137,29 @@ resource diagnosticSettings 'Microsoft.Insights/diagnosticSettings@2021-05-01-pr
 }
 
 // Assign ACR Pull role to App Service managed identity
-resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(principalId)) {
+// Unconditional: the managed identity always needs pull access regardless of deployment caller
+resource acrPullRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(acr.id, appService.id, 'acrpull')
   scope: acr
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull role
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d') // AcrPull
+    principalId: appService.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Get AI Services reference for role assignment
+resource aiServices 'Microsoft.CognitiveServices/accounts@2023-05-01' existing = if (!empty(aiServicesName)) {
+  name: aiServicesName
+}
+
+// Assign Cognitive Services OpenAI User role to App Service managed identity
+// Required for identity-only auth: allows calling the AI endpoint without an API key
+resource aiUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(aiServicesName)) {
+  name: guid(aiServices.id, appService.id, 'cognitiveservicesopenaiuser')
+  scope: aiServices
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd') // Cognitive Services OpenAI User
     principalId: appService.identity.principalId
     principalType: 'ServicePrincipal'
   }

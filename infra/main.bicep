@@ -9,9 +9,6 @@ param environmentName string
 @description('Primary location for all resources')
 param location string
 
-@description('Id of the principal to assign database and application roles')
-param principalId string = ''
-
 // Tags to apply to all resources
 var tags = {
   'azd-env-name': environmentName
@@ -70,7 +67,6 @@ module appService './modules/appService.bicep' = {
     tags: tags
     logAnalyticsWorkspaceId: logAnalytics.outputs.id
     acrName: acr.outputs.name
-    principalId: principalId
     aiServicesEndpoint: foundry.outputs.endpoint
     aiServicesName: foundry.outputs.name
   }

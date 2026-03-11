@@ -1,3 +1,5 @@
+using Azure.Core;
+using Azure.Identity;
 using Microsoft.AspNetCore.Mvc;
 using System.Text;
 using System.Text.Json;
@@ -33,16 +35,19 @@ namespace ZavaStorefront.Controllers
             var endpoint = _configuration["AzureAI:Endpoint"]
                            ?? Environment.GetEnvironmentVariable("AZURE_AI_SERVICES_ENDPOINT");
             var deploymentName = _configuration["AzureAI:DeploymentName"] ?? "gpt-4o";
-            var apiKey = _configuration["AzureAI:ApiKey"]
-                         ?? Environment.GetEnvironmentVariable("AZURE_AI_SERVICES_KEY");
 
-            if (string.IsNullOrEmpty(endpoint) || string.IsNullOrEmpty(apiKey))
+            if (string.IsNullOrEmpty(endpoint))
             {
                 model.History = (model.History ?? string.Empty) +
                     "You: " + model.UserMessage + "\nAssistant: [Error: Azure AI endpoint is not configured.]\n\n";
                 model.UserMessage = string.Empty;
                 return View(model);
             }
+
+            // Obtain a bearer token using the managed identity (or developer credentials locally)
+            var credential = new DefaultAzureCredential();
+            var tokenRequestContext = new TokenRequestContext(new[] { "https://cognitiveservices.azure.com/.default" });
+            var accessToken = await credential.GetTokenAsync(tokenRequestContext);
 
             try
             {
@@ -55,7 +60,7 @@ namespace ZavaStorefront.Controllers
                 };
 
                 var request = new HttpRequestMessage(HttpMethod.Post, url);
-                request.Headers.Add("api-key", apiKey);
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken.Token);
                 request.Content = new StringContent(
                     JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
